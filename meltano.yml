@@ -1,0 +1,264 @@
+version: 1
+default_environment: default
+project_id: mysql-to-postgres
+environments:
+  - name: default
+    config:
+      plugins:
+        extractors:
+          # Extractors mặc định (có thể đổi tên hoặc thêm mới)
+          - name: tap-mysql
+            namespace: tap_mysql
+            pip_url: pipelinewise-tap-mysql
+            executable: tap-mysql
+            capabilities:
+              - catalog
+              - discover
+              - state
+            settings:
+              - name: host
+                kind: string
+                label: MySQL Host
+                description: MySQL server hostname
+              - name: port
+                kind: integer
+                label: MySQL Port
+                default: 3306
+                description: MySQL server port
+              - name: user
+                kind: string
+                label: MySQL User
+                description: MySQL username
+              - name: password
+                kind: password
+                label: MySQL Password
+                description: MySQL password
+              - name: database
+                kind: string
+                label: MySQL Database
+                description: MySQL database name
+              - name: filter_schemas
+                kind: array
+                label: Filter Schemas
+                description: List of schemas to sync (leave empty to sync all)
+              - name: filter_tables
+                kind: array
+                label: Filter Tables
+                description: List of tables to sync (leave empty to sync all)
+          
+          # Ví dụ: Thêm nhiều extractors cho các MySQL DB khác nhau
+          # Uncomment và cấu hình theo nhu cầu
+          # - name: tap-mysql-db1
+          #   namespace: tap_mysql
+          #   pip_url: pipelinewise-tap-mysql
+          #   executable: tap-mysql
+          #   capabilities:
+          #     - catalog
+          #     - discover
+          #     - state
+          #   settings:
+          #     - name: host
+          #       kind: string
+          #     - name: port
+          #       kind: integer
+          #       default: 3306
+          #     - name: user
+          #       kind: string
+          #     - name: password
+          #       kind: password
+          #     - name: database
+          #       kind: string
+          #     - name: filter_schemas
+          #       kind: array
+          #     - name: filter_tables
+          #       kind: array
+          #
+          # - name: tap-mysql-db2
+          #   namespace: tap_mysql
+          #   pip_url: pipelinewise-tap-mysql
+          #   executable: tap-mysql
+          #   capabilities:
+          #     - catalog
+          #     - discover
+          #     - state
+          #   settings:
+          #     - name: host
+          #       kind: string
+          #     - name: port
+          #       kind: integer
+          #       default: 3306
+          #     - name: user
+          #       kind: string
+          #     - name: password
+          #       kind: password
+          #     - name: database
+          #       kind: string
+          #     - name: filter_schemas
+          #       kind: array
+          #     - name: filter_tables
+          #       kind: array
+
+        loaders:
+          # Loader mặc định
+          - name: target-postgres
+            namespace: target_postgres
+            pip_url: pipelinewise-target-postgres
+            executable: target-postgres
+            capabilities:
+              - state
+              - about
+              - schema-messages
+              - record-messages
+            settings:
+              - name: host
+                kind: string
+                label: PostgreSQL Host
+                description: PostgreSQL server hostname
+              - name: port
+                kind: integer
+                label: PostgreSQL Port
+                default: 5432
+                description: PostgreSQL server port
+              - name: user
+                kind: string
+                label: PostgreSQL User
+                description: PostgreSQL username
+              - name: password
+                kind: password
+                label: PostgreSQL Password
+                description: PostgreSQL password
+              - name: dbname
+                kind: string
+                label: PostgreSQL Database
+                description: PostgreSQL database name
+              - name: default_target_schema
+                kind: string
+                label: Default Target Schema
+                default: public
+                description: Default target schema where data will be loaded
+              - name: batch_size_rows
+                kind: integer
+                label: Batch Size
+                default: 100000
+                description: Number of rows per batch
+          
+          # Ví dụ: Thêm nhiều loaders cho các PostgreSQL DB khác nhau
+          # Uncomment và cấu hình theo nhu cầu
+          # - name: target-postgres-db1
+          #   namespace: target_postgres
+          #   pip_url: pipelinewise-target-postgres
+          #   executable: target-postgres
+          #   capabilities:
+          #     - state
+          #     - about
+          #     - schema-messages
+          #     - record-messages
+          #   settings:
+          #     - name: host
+          #       kind: string
+          #     - name: port
+          #       kind: integer
+          #       default: 5432
+          #     - name: user
+          #       kind: string
+          #     - name: password
+          #       kind: password
+          #     - name: dbname
+          #       kind: string
+          #     - name: default_target_schema
+          #       kind: string
+          #       default: public
+          #     - name: batch_size_rows
+          #       kind: integer
+          #       default: 100000
+          #
+          # - name: target-postgres-common
+          #   namespace: target_postgres
+          #   pip_url: pipelinewise-target-postgres
+          #   executable: target-postgres
+          #   capabilities:
+          #     - state
+          #     - about
+          #     - schema-messages
+          #     - record-messages
+          #   settings:
+          #     - name: host
+          #       kind: string
+          #     - name: port
+          #       kind: integer
+          #       default: 5432
+          #     - name: user
+          #       kind: string
+          #     - name: password
+          #       kind: password
+          #     - name: dbname
+          #       kind: string
+          #     - name: default_target_schema
+          #       kind: string
+          #       default: public
+          #     - name: batch_size_rows
+          #       kind: integer
+          #       default: 100000
+
+    env:
+      # Cấu hình mặc định
+      TAP_MYSQL_HOST: ${MYSQL_HOST}
+      TAP_MYSQL_PORT: ${MYSQL_PORT}
+      TAP_MYSQL_USER: ${MYSQL_USER}
+      TAP_MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      TAP_MYSQL_DATABASE: ${MYSQL_DATABASE}
+      TARGET_POSTGRES_HOST: ${POSTGRES_HOST}
+      TARGET_POSTGRES_PORT: ${POSTGRES_PORT}
+      TARGET_POSTGRES_USER: ${POSTGRES_USER}
+      TARGET_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TARGET_POSTGRES_DBNAME: ${POSTGRES_DBNAME}
+      TARGET_POSTGRES_DEFAULT_TARGET_SCHEMA: ${POSTGRES_DEFAULT_TARGET_SCHEMA:-public}
+      
+      # Ví dụ: Cấu hình cho nhiều extractors/loaders
+      # Uncomment và cấu hình theo nhu cầu
+      # TAP_MYSQL_DB1_HOST: ${MYSQL_DB1_HOST}
+      # TAP_MYSQL_DB1_PORT: ${MYSQL_DB1_PORT}
+      # TAP_MYSQL_DB1_USER: ${MYSQL_DB1_USER}
+      # TAP_MYSQL_DB1_PASSWORD: ${MYSQL_DB1_PASSWORD}
+      # TAP_MYSQL_DB1_DATABASE: ${MYSQL_DB1_DATABASE}
+      # TAP_MYSQL_DB2_HOST: ${MYSQL_DB2_HOST}
+      # TAP_MYSQL_DB2_PORT: ${MYSQL_DB2_PORT}
+      # TAP_MYSQL_DB2_USER: ${MYSQL_DB2_USER}
+      # TAP_MYSQL_DB2_PASSWORD: ${MYSQL_DB2_PASSWORD}
+      # TAP_MYSQL_DB2_DATABASE: ${MYSQL_DB2_DATABASE}
+      # TARGET_POSTGRES_DB1_HOST: ${POSTGRES_DB1_HOST}
+      # TARGET_POSTGRES_DB1_PORT: ${POSTGRES_DB1_PORT}
+      # TARGET_POSTGRES_DB1_USER: ${POSTGRES_DB1_USER}
+      # TARGET_POSTGRES_DB1_PASSWORD: ${POSTGRES_DB1_PASSWORD}
+      # TARGET_POSTGRES_DB1_DBNAME: ${POSTGRES_DB1_DBNAME}
+      # TARGET_POSTGRES_DB1_DEFAULT_TARGET_SCHEMA: ${POSTGRES_DB1_DEFAULT_TARGET_SCHEMA:-public}
+      # TARGET_POSTGRES_COMMON_HOST: ${POSTGRES_COMMON_HOST}
+      # TARGET_POSTGRES_COMMON_PORT: ${POSTGRES_COMMON_PORT}
+      # TARGET_POSTGRES_COMMON_USER: ${POSTGRES_COMMON_USER}
+      # TARGET_POSTGRES_COMMON_PASSWORD: ${POSTGRES_COMMON_PASSWORD}
+      # TARGET_POSTGRES_COMMON_DBNAME: ${POSTGRES_COMMON_DBNAME}
+      # TARGET_POSTGRES_COMMON_DEFAULT_TARGET_SCHEMA: ${POSTGRES_COMMON_DEFAULT_TARGET_SCHEMA:-public}
+
+schedules:
+  # Schedule mặc định
+  - name: hourly-mysql-sync
+    interval: '@hourly'
+    job: tap-mysql target-postgres
+  
+  # Ví dụ: Thêm nhiều schedules cho các cặp đồng bộ khác nhau
+  # Uncomment và cấu hình theo nhu cầu
+  # - name: hourly-db1-to-db1
+  #   interval: '@hourly'
+  #   job: tap-mysql-db1 target-postgres-db1
+  #
+  # - name: hourly-db2-to-db2
+  #   interval: '@hourly'
+  #   job: tap-mysql-db2 target-postgres-db2
+  #
+  # - name: hourly-db1-to-common
+  #   interval: '@hourly'
+  #   job: tap-mysql-db1 target-postgres-common
+  #
+  # - name: hourly-db2-to-common
+  #   interval: '@hourly'
+  #   job: tap-mysql-db2 target-postgres-common
