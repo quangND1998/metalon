@@ -2,14 +2,157 @@
 
 Project này sử dụng Meltano để đồng bộ dữ liệu từ MySQL sang PostgreSQL.
 
+## 📚 Tài Liệu Hướng Dẫn
+
+- **[QUICKSTART.md](QUICKSTART.md)** - Hướng dẫn chi tiết chạy dự án từ đầu (Khuyến nghị đọc trước)
+- **[COMMANDS.md](COMMANDS.md)** - Danh sách lệnh nhanh để copy-paste
+- **[SELECT_TABLES.md](SELECT_TABLES.md)** - Hướng dẫn chi tiết về chọn tables để sync
+
 ## Yêu cầu
 
-- Python 3.8+
-- Meltano CLI
+- Python 3.8+ (nếu chạy local)
+- Meltano CLI (nếu chạy local)
 - MySQL server đang chạy
 - PostgreSQL server đang chạy
 
-## Cài đặt
+**Hoặc sử dụng Docker** (khuyến nghị - không cần cài đặt Python/Meltano local)
+
+## Cài đặt với Docker (Khuyến nghị)
+
+### 1. Cài đặt Docker và Docker Compose
+
+Đảm bảo bạn đã cài đặt:
+- [Docker Desktop](https://www.docker.com/products/docker-desktop) (Windows/Mac)
+- Hoặc Docker Engine + Docker Compose (Linux)
+
+### 2. Cấu hình môi trường
+
+Tạo file `.env` từ `.env.example` (nếu có) hoặc tạo mới với nội dung:
+
+```bash
+# MySQL connection
+MYSQL_HOST=mysql
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=password
+MYSQL_DATABASE=testdb
+
+# PostgreSQL connection
+POSTGRES_HOST=postgres
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DBNAME=testdb
+POSTGRES_DEFAULT_TARGET_SCHEMA=public
+```
+
+**Lưu ý:** Nếu bạn sử dụng database bên ngoài (không phải containers trong docker-compose), hãy thay đổi `MYSQL_HOST` và `POSTGRES_HOST` thành địa chỉ thực tế (ví dụ: `localhost` hoặc IP của server).
+
+### 3. Build và chạy với Docker Compose
+
+```bash
+# Build image
+docker-compose build
+
+# Chạy tất cả services (MySQL, PostgreSQL, và Meltano)
+docker-compose up -d
+
+# Xem logs
+docker-compose logs -f meltano
+
+# Chạy sync một lần
+docker-compose run --rm meltano meltano run tap-mysql target-postgres
+```
+
+### 4. Sử dụng Docker
+
+**Khám phá schema:**
+```bash
+docker-compose run --rm meltano meltano invoke tap-mysql --discover
+```
+
+**Chọn streams (bảng cụ thể):**
+```bash
+# Chọn bảng cụ thể (ví dụ: bảng users trong database mydb)
+docker-compose run --rm meltano meltano select tap-mysql "mydb.users" "*"
+
+# Hoặc chọn nhiều bảng
+docker-compose run --rm meltano meltano select tap-mysql "mydb.users" "*"
+docker-compose run --rm meltano meltano select tap-mysql "mydb.orders" "*"
+
+# Xem danh sách đã chọn
+docker-compose run --rm meltano meltano select tap-mysql --list
+
+# Xem hướng dẫn chi tiết: SELECT_TABLES.md
+```
+
+**Chạy đồng bộ:**
+```bash
+docker-compose run --rm meltano meltano run tap-mysql target-postgres
+```
+
+**Chạy với full refresh:**
+```bash
+docker-compose run --rm meltano meltano run tap-mysql target-postgres --full-refresh
+```
+
+**Chạy interactive shell:**
+```bash
+docker-compose run --rm meltano /bin/bash
+```
+
+**Sử dụng helper scripts (dễ dàng hơn):**
+
+Windows PowerShell:
+```powershell
+.\docker-run.ps1 meltano run tap-mysql target-postgres
+.\docker-run.ps1 meltano invoke tap-mysql --discover
+.\docker-run.ps1 meltano select tap-mysql "*.*"
+```
+
+Linux/Mac:
+```bash
+chmod +x docker-run.sh
+./docker-run.sh meltano run tap-mysql target-postgres
+./docker-run.sh meltano invoke tap-mysql --discover
+./docker-run.sh meltano select tap-mysql "*.*"
+```
+
+### 5. Sử dụng database bên ngoài
+
+Nếu bạn muốn sử dụng MySQL/PostgreSQL đã có sẵn (không dùng containers), chỉnh sửa `docker-compose.yml`:
+
+```yaml
+services:
+  meltano:
+    # ... cấu hình khác
+    depends_on: []  # Xóa depends_on
+    # ... 
+  
+  # Comment hoặc xóa services mysql và postgres
+  # mysql:
+  #   ...
+  # postgres:
+  #   ...
+```
+
+Và cập nhật `.env` với host thực tế:
+```bash
+MYSQL_HOST=your-mysql-host
+POSTGRES_HOST=your-postgres-host
+```
+
+### 6. Dừng và xóa containers
+
+```bash
+# Dừng containers
+docker-compose down
+
+# Dừng và xóa volumes (xóa dữ liệu database)
+docker-compose down -v
+```
+
+## Cài đặt (Local - không dùng Docker)
 
 ### 1. Cài đặt Meltano
 
@@ -58,22 +201,35 @@ meltano invoke tap-mysql --discover > schema.json
 
 ### 2. Chọn các stream để sync
 
+**📖 Xem hướng dẫn chi tiết:** [SELECT_TABLES.md](SELECT_TABLES.md)
+
 Chọn các bảng bạn muốn đồng bộ:
 
+**Chọn tất cả bảng:**
 ```bash
-meltano select tap-mysql "*.*"
+docker-compose run --rm meltano meltano select tap-mysql "*.*"
 ```
 
-Hoặc chọn bảng cụ thể:
-
+**Chọn bảng cụ thể (ví dụ: bảng `users` trong database `mydb`):**
 ```bash
-meltano select tap-mysql "database_name.table_name" "*"
+docker-compose run --rm meltano meltano select tap-mysql "mydb.users" "*"
 ```
 
-Để xem các stream đã chọn:
-
+**Chọn nhiều bảng:**
 ```bash
-meltano select tap-mysql --list
+docker-compose run --rm meltano meltano select tap-mysql "mydb.users" "*"
+docker-compose run --rm meltano meltano select tap-mysql "mydb.orders" "*"
+docker-compose run --rm meltano meltano select tap-mysql "mydb.products" "*"
+```
+
+**Xem danh sách các bảng đã chọn:**
+```bash
+docker-compose run --rm meltano meltano select tap-mysql --list
+```
+
+**Bỏ chọn một bảng:**
+```bash
+docker-compose run --rm meltano meltano select tap-mysql "mydb.table_name" --rm
 ```
 
 ### 3. Chạy đồng bộ (EL)

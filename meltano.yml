@@ -1,11 +1,8 @@
-version: 1
 default_environment: default
 project_id: mysql-to-postgres
-environments:
-  - name: default
-    config:
-      plugins:
-        extractors:
+
+plugins:
+  extractors:
           # Extractors mặc định (có thể đổi tên hoặc thêm mới)
           - name: tap-mysql
             namespace: tap_mysql
@@ -45,6 +42,20 @@ environments:
                 kind: array
                 label: Filter Tables
                 description: List of tables to sync (leave empty to sync all)
+            select:
+              - wealify_test-transactions.*
+              - wealify_test-wallets.*
+              - wealify_test-platform_fees.*
+            metadata:
+              wealify_test-transactions:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_test-wallets:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_test-platform_fees:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
           
           # Ví dụ: Thêm nhiều extractors cho các MySQL DB khác nhau
           # Uncomment và cấu hình theo nhu cầu
@@ -95,10 +106,23 @@ environments:
           #       kind: string
           #     - name: filter_schemas
           #       kind: array
-          #     - name: filter_tables
-          #       kind: array
+              #     - name: filter_tables
+              #       kind: array
 
-        loaders:
+  transformers:
+    - name: transform-field
+      namespace: transform_field
+      pip_url: pipelinewise-transform-field
+      executable: transform-field
+      capabilities:
+        - about
+        - stream-maps
+      settings:
+        - name: transformations
+          kind: array
+          description: List of transformations to apply
+
+  loaders:
           # Loader mặc định
           - name: target-postgres
             namespace: target_postgres
@@ -134,7 +158,7 @@ environments:
               - name: default_target_schema
                 kind: string
                 label: Default Target Schema
-                default: public
+                default: airbyte_raw
                 description: Default target schema where data will be loaded
               - name: batch_size_rows
                 kind: integer
@@ -196,10 +220,12 @@ environments:
           #     - name: default_target_schema
           #       kind: string
           #       default: public
-          #     - name: batch_size_rows
-          #       kind: integer
-          #       default: 100000
+              #     - name: batch_size_rows
+              #       kind: integer
+              #       default: 100000
 
+environments:
+  - name: default
     env:
       # Cấu hình mặc định
       TAP_MYSQL_HOST: ${MYSQL_HOST}
@@ -212,7 +238,7 @@ environments:
       TARGET_POSTGRES_USER: ${POSTGRES_USER}
       TARGET_POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       TARGET_POSTGRES_DBNAME: ${POSTGRES_DBNAME}
-      TARGET_POSTGRES_DEFAULT_TARGET_SCHEMA: ${POSTGRES_DEFAULT_TARGET_SCHEMA:-public}
+      TARGET_POSTGRES_DEFAULT_TARGET_SCHEMA: airbyte_raw
       
       # Ví dụ: Cấu hình cho nhiều extractors/loaders
       # Uncomment và cấu hình theo nhu cầu

@@ -1,0 +1,80 @@
+services:
+  # Meltano service
+  meltano:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meltano-sync
+    environment:
+      # MySQL connection
+      - MYSQL_HOST=${MYSQL_HOST:-mysql}
+      - MYSQL_PORT=${MYSQL_PORT:-3306}
+      - MYSQL_USER=${MYSQL_USER:-root}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD:-password}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-testdb}
+      
+      # PostgreSQL connection
+      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DBNAME=${POSTGRES_DBNAME:-testdb}
+      - POSTGRES_DEFAULT_TARGET_SCHEMA=${POSTGRES_DEFAULT_TARGET_SCHEMA:-airbyte_raw}
+    volumes:
+      - ./.meltano:/app/.meltano
+      - ./meltano.yml:/app/meltano.yml
+    depends_on:
+      - mysql
+      - postgres
+    networks:
+      - meltano-network
+    # Override command if needed
+    # command: meltano run tap-mysql target-postgres
+
+  # MySQL database (optional - for testing)
+  mysql:
+    image: mysql:8.0
+    container_name: meltano-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD:-password}
+      - MYSQL_DATABASE=${MYSQL_DATABASE:-testdb}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - meltano-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PostgreSQL database (optional - for testing)
+  postgres:
+    image: postgres:15
+    container_name: meltano-postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DBNAME:-testdb}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - meltano-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mysql_data:
+  postgres_data:
+
+networks:
+  meltano-network:
+    driver: bridge
+

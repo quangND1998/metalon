@@ -1,0 +1,28 @@
+# Example override file for docker-compose
+# Copy this to .docker-compose.override.yml and customize as needed
+# This file allows you to override settings without modifying docker-compose.yml
+
+version: '3.8'
+
+services:
+  meltano:
+    # Override command to run specific sync
+    # command: meltano run tap-mysql target-postgres
+    
+    # Or run interactively
+    # command: /bin/bash
+    
+    # Add more environment variables if needed
+    # environment:
+    #   - ADDITIONAL_VAR=value
+
+  # If you want to use external databases instead of containers
+  # mysql:
+  #   external: true
+  #   container_name: external-mysql
+  
+  # postgres:
+  #   external: true
+  #   container_name: external-postgres
+
+

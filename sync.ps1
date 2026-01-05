@@ -46,12 +46,41 @@ Write-Host "Using extractor: $Tap" -ForegroundColor Cyan
 Write-Host "Using loader: $Target" -ForegroundColor Cyan
 Write-Host ""
 
+# Check if transform_datetime.py exists and use it if available
+$useTransform = Test-Path "transform_datetime.py"
+
+# Kiểm tra state để tự động quyết định full refresh hay incremental
+$statePath = ".\.meltano\state\tap-mysql-to-target-postgres.json"
+$hasState = Test-Path $statePath
+
 if ($FullRefresh) {
-    Write-Host "Running full refresh sync..." -ForegroundColor Yellow
-    meltano run $Tap $Target --full-refresh
+    Write-Host "Full refresh requested..." -ForegroundColor Yellow
+    if ($hasState) {
+        Write-Host "Removing existing state file for full refresh..." -ForegroundColor Yellow
+        Remove-Item $statePath -Force -ErrorAction SilentlyContinue
+    }
+} elseif (-not $hasState) {
+    Write-Host "No state found - this appears to be the first sync" -ForegroundColor Yellow
+    Write-Host "Running FULL REFRESH (sync all data)..." -ForegroundColor Yellow
 } else {
-    Write-Host "Running incremental sync..." -ForegroundColor Green
-    meltano run $Tap $Target
+    Write-Host "State found - running INCREMENTAL sync (only new/changed data)..." -ForegroundColor Green
+}
+
+if ($useTransform) {
+    Write-Host "Using datetime transform to handle invalid MySQL datetime values..." -ForegroundColor Yellow
+    $command = "meltano invoke $Tap | python3 /app/transform_datetime.py | meltano invoke $Target"
+    
+    Write-Host ""
+    Write-Host "Running: docker-compose run --rm meltano bash -c `"$command`"" -ForegroundColor Cyan
+    docker-compose run --rm meltano bash -c $command
+} else {
+    if (-not $hasState -or $FullRefresh) {
+        Write-Host "Running full refresh sync..." -ForegroundColor Yellow
+        docker-compose run --rm meltano meltano run $Tap $Target --full-refresh
+    } else {
+        Write-Host "Running incremental sync..." -ForegroundColor Green
+        docker-compose run --rm meltano meltano run $Tap $Target
+    }
 }
 
 if ($LASTEXITCODE -eq 0) {
