@@ -7,6 +7,7 @@ Project này sử dụng Meltano để đồng bộ dữ liệu từ MySQL sang 
 - **[QUICKSTART.md](QUICKSTART.md)** - Hướng dẫn chi tiết chạy dự án từ đầu (Khuyến nghị đọc trước)
 - **[COMMANDS.md](COMMANDS.md)** - Danh sách lệnh nhanh để copy-paste
 - **[SELECT_TABLES.md](SELECT_TABLES.md)** - Hướng dẫn chi tiết về chọn tables để sync
+- **[deploy/DEPLOYMENT.md](deploy/DEPLOYMENT.md)** - Hướng dẫn deploy lên Digital Ocean Droplet với GitHub CI/CD
 
 ## Yêu cầu
 
@@ -554,6 +555,52 @@ psql -h ${POSTGRES_HOST} -p ${POSTGRES_PORT} -U ${POSTGRES_USER} -d ${POSTGRES_D
 ```bash
 meltano run tap-mysql target-postgres --log-level=debug
 ```
+
+### Vấn đề: Mỗi lần sync đều là FULL REFRESH
+
+**Triệu chứng:** Mỗi lần chạy sync đều thấy "No state found - this appears to be the first sync" và chạy FULL REFRESH thay vì incremental sync.
+
+**Nguyên nhân:** 
+- Khi sử dụng `meltano invoke` với pipe (`|`) để áp dụng transform, state không được quản lý tự động
+- `meltano invoke` chỉ chạy lệnh riêng lẻ, không quản lý state như `meltano run`
+
+**Giải pháp:**
+
+1. **Sử dụng script đã được cập nhật** (khuyến nghị):
+   ```powershell
+   # Script đã được cập nhật để quản lý state đúng cách
+   .\sync.ps1
+   .\sync-with-transform.ps1
+   .\sync-auto.ps1
+   ```
+
+2. **Kiểm tra state file:**
+   ```powershell
+   # Kiểm tra xem state có được tạo không
+   Test-Path .\.meltano\state\tap-mysql-to-target-postgres.json
+   
+   # Xem nội dung state file
+   Get-Content .\.meltano\state\tap-mysql-to-target-postgres.json
+   ```
+
+3. **Rebuild Docker image** sau khi cập nhật script:
+   ```powershell
+   docker-compose build
+   ```
+
+4. **Nếu vẫn gặp vấn đề, dùng `meltano run` trực tiếp** (không có transform):
+   ```powershell
+   # Full refresh
+   docker-compose run --rm meltano meltano run tap-mysql target-postgres --full-refresh
+   
+   # Incremental sync
+   docker-compose run --rm meltano meltano run tap-mysql target-postgres
+   ```
+
+**Lưu ý:** 
+- State được lưu trong `.meltano/state/tap-mysql-to-target-postgres.json`
+- Khi dùng transform qua pipe, cần đảm bảo state được quản lý đúng cách
+- Để quản lý state tốt hơn, nên tạo transform plugin trong `meltano.yml` thay vì dùng pipe
 
 ## Tài liệu tham khảo
 

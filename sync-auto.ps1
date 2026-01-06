@@ -25,9 +25,12 @@ if ($ForceFullRefresh) {
 }
 
 # Chạy sync với transform
+$refreshFlag = if ($ForceFullRefresh) { "true" } else { "false" }
+$command = "bash /app/sync-with-state.sh tap-mysql target-postgres $refreshFlag"
+
 Write-Host ""
-Write-Host "Running: docker-compose run --rm meltano bash -c `"meltano invoke tap-mysql | python3 /app/transform_datetime.py | meltano invoke target-postgres`"" -ForegroundColor Cyan
-docker-compose run --rm meltano bash -c "meltano invoke tap-mysql | python3 /app/transform_datetime.py | meltano invoke target-postgres"
+Write-Host "Running: docker-compose run --rm meltano bash -c `"$command`"" -ForegroundColor Cyan
+docker-compose run --rm meltano bash -c $command
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host "`nSync completed successfully!" -ForegroundColor Green

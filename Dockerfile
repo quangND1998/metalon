@@ -18,6 +18,7 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     default-libmysqlclient-dev \
     pkg-config \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Meltano
@@ -31,6 +32,11 @@ RUN chmod +x /entrypoint.sh
 
 # Copy remaining project files (excluding .meltano which will be a volume)
 COPY . .
+
+# Make scripts executable
+RUN chmod +x /app/sync-with-state.sh && \
+    chmod +x /app/transform_stream_name.py && \
+    chmod +x /app/transform_datetime.py
 
 # Create volume for state persistence
 VOLUME ["/app/.meltano"]

@@ -1,3 +1,7 @@
+# Docker Compose file cho Digital Ocean Droplet
+# Copy file này lên Droplet tại /opt/meltano-sync/docker-compose.yml
+# Và thay YOUR_DOCKERHUB_USERNAME bằng Docker Hub username của bạn
+
 services:
   # SSH Tunnel service (tạo tunnel đến MySQL RDS)
   ssh-tunnel:
@@ -28,10 +32,9 @@ services:
 
   # Meltano service
   meltano:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: YOUR_DOCKERHUB_USERNAME/meltano-sync:latest
     container_name: meltano-sync
+    restart: unless-stopped
     environment:
       # MySQL connection (qua SSH tunnel - sử dụng tên service ssh-tunnel)
       - MYSQL_HOST=${MYSQL_HOST:-ssh-tunnel}
@@ -40,7 +43,7 @@ services:
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_DATABASE=${MYSQL_DATABASE}
       
-      # Meltano tap-mysql environment variables (format nhất quán với meltano.yml)
+      # Meltano tap-mysql environment variables
       - TAP_MYSQL_HOST=${MYSQL_HOST:-ssh-tunnel}
       - TAP_MYSQL_PORT=${MYSQL_PORT:-3306}
       - TAP_MYSQL_USER=${MYSQL_USER}
@@ -48,19 +51,19 @@ services:
       - TAP_MYSQL_DATABASE=${MYSQL_DATABASE}
       
       # PostgreSQL connection
-      - POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DBNAME=${POSTGRES_DBNAME:-testdb}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DBNAME=${POSTGRES_DBNAME}
       - POSTGRES_DEFAULT_TARGET_SCHEMA=${POSTGRES_DEFAULT_TARGET_SCHEMA:-airbyte_raw}
       
-      # Meltano target-postgres environment variables (format nhất quán với meltano.yml)
-      - TARGET_POSTGRES_HOST=${POSTGRES_HOST:-postgres}
+      # Meltano target-postgres environment variables
+      - TARGET_POSTGRES_HOST=${POSTGRES_HOST}
       - TARGET_POSTGRES_PORT=${POSTGRES_PORT:-5432}
-      - TARGET_POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - TARGET_POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - TARGET_POSTGRES_DBNAME=${POSTGRES_DBNAME:-testdb}
+      - TARGET_POSTGRES_USER=${POSTGRES_USER}
+      - TARGET_POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - TARGET_POSTGRES_DBNAME=${POSTGRES_DBNAME}
       - TARGET_POSTGRES_DEFAULT_TARGET_SCHEMA=${POSTGRES_DEFAULT_TARGET_SCHEMA:-airbyte_raw}
     volumes:
       - ./.meltano:/app/.meltano
@@ -68,61 +71,12 @@ services:
       - ./transform_stream_name.py:/app/transform_stream_name.py
       - ./transform_datetime.py:/app/transform_datetime.py
     depends_on:
-      ssh-tunnel:
-        condition: service_started
-      postgres:
-        condition: service_healthy
-    networks:
-      meltano-network:
-        aliases:
-          - meltano
-    # Override command if needed
-    # command: meltano run tap-mysql target-postgres
-
-  # MySQL database (optional - for testing)
-  mysql:
-    image: mysql:8.0
-    container_name: meltano-mysql
-    environment:
-      - MYSQL_ROOT_PASSWORD=${MYSQL_PASSWORD:-password}
-      - MYSQL_DATABASE=${MYSQL_DATABASE:-testdb}
-    ports:
-      - "${MYSQL_PORT:-3306}:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
+      - ssh-tunnel
     networks:
       - meltano-network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # PostgreSQL database (optional - for testing)
-  postgres:
-    image: postgres:15
-    container_name: meltano-postgres
-    environment:
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${POSTGRES_DBNAME:-testdb}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - meltano-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-volumes:
-  mysql_data:
-  postgres_data:
 
 networks:
   meltano-network:
     driver: bridge
+
 

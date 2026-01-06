@@ -58,3 +58,7 @@ catalog.json
 # State files
 state.json
 *.state.json
+
+# SSH Keys
+*.pem
+keys/*.pem

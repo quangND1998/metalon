@@ -68,7 +68,18 @@ if ($FullRefresh) {
 
 if ($useTransform) {
     Write-Host "Using datetime transform to handle invalid MySQL datetime values..." -ForegroundColor Yellow
-    $command = "meltano invoke $Tap | python3 /app/transform_datetime.py | meltano invoke $Target"
+    # Use wrapper script to ensure state is managed properly with transform
+    $refreshFlag = if ($FullRefresh -or -not $hasState) { "true" } else { "false" }
+    $command = "bash /app/sync-with-state.sh $Tap $Target $refreshFlag"
+    
+    if ($FullRefresh -or -not $hasState) {
+        Write-Host "Running full refresh sync with transform..." -ForegroundColor Yellow
+        if ($hasState) {
+            Remove-Item $statePath -Force -ErrorAction SilentlyContinue
+        }
+    } else {
+        Write-Host "Running incremental sync with transform..." -ForegroundColor Green
+    }
     
     Write-Host ""
     Write-Host "Running: docker-compose run --rm meltano bash -c `"$command`"" -ForegroundColor Cyan

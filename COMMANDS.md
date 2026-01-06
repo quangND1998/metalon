@@ -5,22 +5,52 @@ File này chứa các lệnh thường dùng nhất để chạy dự án. Xem `
 ## 🚀 Setup Lần Đầu
 
 ```powershell
-# 1. Tạo file .env (copy từ template và chỉnh sửa)
-# Xem QUICKSTART.md để biết nội dung file .env
+# 1. Tạo thư mục keys và đặt file PEM key
+mkdir keys
+# Copy file PEM key vào thư mục keys/
+# Ví dụ: keys/thehuman-wealify-keypair.pem
 
-# 2. Build Docker image
+# 2. Tạo file .env với nội dung:
+# SSH Tunnel Configuration
+# SSH_HOST=your_ssh_host
+# SSH_PORT=22
+# SSH_USERNAME=your_ssh_username
+# MYSQL_RDS_HOST=your_mysql_rds_host
+# MYSQL_RDS_PORT=3306
+# SSH_KEY_FILE=your_key_file.pem
+#
+# MySQL Connection
+# MYSQL_HOST=ssh-tunnel
+# MYSQL_PORT=3306
+# MYSQL_USER=your_mysql_user
+# MYSQL_PASSWORD=your_mysql_password
+# MYSQL_DATABASE=your_mysql_database
+#
+# PostgreSQL Connection
+# POSTGRES_HOST=postgres
+# POSTGRES_PORT=5432
+# POSTGRES_USER=postgres
+# POSTGRES_PASSWORD=postgres
+# POSTGRES_DBNAME=testdb
+# POSTGRES_DEFAULT_TARGET_SCHEMA=airbyte_raw
+
+# 3. Build Docker image
 docker-compose build
 
-# 3. Khởi động containers
-docker-compose up -d
+# 4. Khởi động SSH tunnel và PostgreSQL
+docker-compose up -d ssh-tunnel postgres
 
-# 4. Tạo schema PostgreSQL
+# 5. Kiểm tra SSH tunnel đang chạy
+docker-compose ps ssh-tunnel
+docker-compose logs ssh-tunnel
+
+# 6. Tạo schema PostgreSQL
 .\create-schema.ps1
 
-# 5. Chạy discovery
+# 7. Chạy discovery
 docker-compose run --rm meltano meltano invoke tap-mysql --discover
 
-# 6. Chạy sync lần đầu
+# 8. Chạy sync lần đầu
 .\sync.ps1 --full-refresh
 ```
 
@@ -40,19 +70,27 @@ docker-compose run --rm meltano meltano invoke tap-mysql --discover
 ## 🔍 Kiểm Tra và Debug
 
 ```powershell
-# Debug cấu hình
-.\debug-sync.ps1
-
 # Kiểm tra containers đang chạy
 docker-compose ps
 
+# Kiểm tra SSH tunnel đang chạy
+docker-compose ps ssh-tunnel
+docker-compose logs ssh-tunnel
+
+# Test kết nối MySQL qua SSH tunnel (dùng discovery của Meltano)
+docker-compose run --rm meltano meltano invoke tap-mysql --discover
+
 # Xem logs
 docker-compose logs -f meltano
-docker-compose logs -f mysql
+docker-compose logs -f ssh-tunnel
 docker-compose logs -f postgres
+
+# Debug cấu hình
+.\debug-sync.ps1
 
 # Kiểm tra cấu hình Meltano
 docker-compose run --rm meltano config list target-postgres
+docker-compose run --rm meltano config list tap-mysql
 ```
 
 ## 🗄️ Quản Lý Database

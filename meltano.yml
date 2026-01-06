@@ -43,20 +43,91 @@ plugins:
                 label: Filter Tables
                 description: List of tables to sync (leave empty to sync all)
             select:
-              - wealify_test-transactions.*
-              - wealify_test-wallets.*
-              - wealify_test-platform_fees.*
+              - wealify_db-transactions.*
+              - wealify_db-wallets.*
+              - wealify_db-platform_fees.*
+              - wealify_db-customers.*
+              - wealify_db-fees.*
+              - wealify_db-ky_events.*
+              - wealify_db-kyc-level2-data-vc.*
+              - wealify_db-providers.*
+              - wealify_db-system_payment_balances.*
+              - wealify_db-system_payment_transactions.*
+              - wealify_db-system-payment-changes.*
+              - wealify_db-system-payment-limits.*
+              - wealify_db-system-payment-priority.*
+              - wealify_db-system-payments.*
+              - wealify_db-transaction_ledgers*
+              - wealify_db-transaction-histories.*
+              - wealify_db-virtual_account_events.*
+              - wealify_db-virtual-accounts.*
+              - wealify_db-virtual-cards.*
+              - wealify_db-volcano_events.*
+              - wealify_db-wallet_snapshots.*
             metadata:
-              wealify_test-transactions:
+              wealify_db-transactions:
                 replication-method: INCREMENTAL
                 replication-key: updated_at
-              wealify_test-wallets:
+              wealify_db-wallets:
                 replication-method: INCREMENTAL
                 replication-key: updated_at
-              wealify_test-platform_fees:
+              wealify_db-platform_fees:
                 replication-method: INCREMENTAL
                 replication-key: updated_at
-          
+              wealify_db-customers:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_db-fees:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+            
+              wealify_db-ky_events:
+                replication-method: FULL_TABLE
+              wealify_db-kyc-level2-data-vc:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_db-providers:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+                table-key-properties:
+                  - value
+              wealify_db-system_payment_balances:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_db-system_payment_transactions:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_db-system-payment-changes:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_db-system-payment-limits:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_db-system-payment-priority:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_db-system-payments:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_db-transaction_ledgers:
+                replication-method: FULL_TABLE
+              wealify_db-transaction-histories:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_db-virtual_account_events:
+                replication-method: FULL_TABLE
+              wealify_db-virtual-accounts:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_db-virtual-cards:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_db-volcano_events:
+                replication-method: INCREMENTAL
+                replication-key: updated_at
+              wealify_db-wallet_snapshots:
+                replication-method: FULL_TABLE
+        
           # Ví dụ: Thêm nhiều extractors cho các MySQL DB khác nhau
           # Uncomment và cấu hình theo nhu cầu
           # - name: tap-mysql-db1
@@ -165,6 +236,10 @@ plugins:
                 label: Batch Size
                 default: 100000
                 description: Number of rows per batch
+              - name: schema_mapping
+                kind: object
+                label: Schema Mapping
+                description: Map source schema/table names to target table names
           
           # Ví dụ: Thêm nhiều loaders cho các PostgreSQL DB khác nhau
           # Uncomment và cấu hình theo nhu cầu
@@ -267,6 +342,9 @@ environments:
 
 schedules:
   # Schedule mặc định
+  # Lưu ý: Để sử dụng transform stream name, chạy:
+  # meltano invoke tap-mysql | python3 transform_stream_name.py | meltano invoke target-postgres
+  # Hoặc sử dụng script sync-with-transform-stream-name.ps1
   - name: hourly-mysql-sync
     interval: '@hourly'
     job: tap-mysql target-postgres

@@ -1,0 +1,99 @@
+name: Build and Deploy to Digital Ocean
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME || 'your-username' }}/meltano-sync
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Digital Ocean Droplet
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Droplet via SSH
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.DO_DROPLET_HOST }}
+          username: ${{ secrets.DO_DROPLET_USER }}
+          key: ${{ secrets.DO_DROPLET_SSH_KEY }}
+          script: |
+            cd /opt/meltano-sync
+            # Pull latest code from GitHub (nếu dùng git)
+            git pull origin main || true
+            # Copy docker-compose.droplet.yml nếu chưa có docker-compose.yml
+            if [ ! -f docker-compose.yml ]; then
+              cp deploy/docker-compose.droplet.yml docker-compose.yml
+            fi
+            # Thay YOUR_DOCKERHUB_USERNAME bằng username từ secret (cập nhật nếu cần)
+            sed -i "s/YOUR_DOCKERHUB_USERNAME/${{ secrets.DOCKERHUB_USERNAME }}/g" docker-compose.yml
+            # Cập nhật image name trong docker-compose.yml
+            sed -i "s|image:.*meltano-sync:latest|image: ${{ env.IMAGE_NAME }}:latest|g" docker-compose.yml
+            # Pull latest image from Docker Hub
+            docker pull ${{ env.IMAGE_NAME }}:latest
+            # Stop and remove old containers
+            docker-compose down || true
+            # Start new containers with latest image
+            docker-compose up -d
+            # Show running containers
+            docker-compose ps
+            # Show logs
+            docker-compose logs --tail=50
+
