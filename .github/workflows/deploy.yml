@@ -75,25 +75,146 @@ jobs:
           username: ${{ secrets.DO_DROPLET_USER }}
           key: ${{ secrets.DO_DROPLET_SSH_KEY }}
           script: |
+            set -e  # Exit on error
+            
             cd /opt/meltano-sync
-            # Pull latest code from GitHub (nếu dùng git)
-            git pull origin main || true
-            # Copy docker-compose.droplet.yml nếu chưa có docker-compose.yml
-            if [ ! -f docker-compose.yml ]; then
-              cp deploy/docker-compose.droplet.yml docker-compose.yml
+            
+            # 1. Kiểm tra thư mục project tồn tại
+            if [ ! -d /opt/meltano-sync ]; then
+              echo "❌ Error: Project directory /opt/meltano-sync does not exist"
+              exit 1
             fi
-            # Thay YOUR_DOCKERHUB_USERNAME bằng username từ secret (cập nhật nếu cần)
+            
+            # 2. Kiểm tra file .env tồn tại
+            if [ ! -f .env ]; then
+              echo "⚠️  Warning: .env file not found. Deployment may fail if environment variables are missing."
+            fi
+            
+            # 3. Kiểm tra thư mục keys tồn tại (nếu cần SSH tunnel)
+            if [ ! -d keys ]; then
+              echo "⚠️  Warning: keys directory not found. SSH tunnel may not work."
+            fi
+            
+            # 4. Kiểm tra disk space (cần ít nhất 2GB free)
+            DISK_FREE=$(df -BG / | tail -1 | awk '{print $4}' | sed 's/G//')
+            if [ "$DISK_FREE" -lt 2 ]; then
+              echo "⚠️  Warning: Low disk space (${DISK_FREE}GB free). Consider cleaning up old images."
+            fi
+            
+            # 5. Backup state trước khi deploy (nếu có)
+            if [ -d .meltano/state ]; then
+              echo "📦 Backing up state..."
+              BACKUP_DIR=".meltano/state-backups"
+              mkdir -p "$BACKUP_DIR"
+              BACKUP_FILE="$BACKUP_DIR/state-backup-$(date +%Y%m%d-%H%M%S).tar.gz"
+              tar -czf "$BACKUP_FILE" .meltano/state/ 2>/dev/null || true
+              echo "✅ State backed up to $BACKUP_FILE"
+              
+              # Xóa backups cũ hơn 7 ngày
+              find "$BACKUP_DIR" -name "state-backup-*.tar.gz" -mtime +7 -delete 2>/dev/null || true
+            fi
+            
+            # 6. Pull latest code from GitHub (nếu dùng git)
+            if [ -d .git ]; then
+              echo "📥 Pulling latest code..."
+              git pull origin main || git pull origin master || echo "⚠️  Git pull failed, continuing..."
+            fi
+            
+            # 7. Copy docker-compose.droplet.yml nếu chưa có docker-compose.yml
+            if [ ! -f docker-compose.yml ]; then
+              echo "📋 Copying docker-compose.droplet.yml..."
+              if [ -f deploy/docker-compose.droplet.yml ]; then
+                cp deploy/docker-compose.droplet.yml docker-compose.yml
+              else
+                echo "❌ Error: deploy/docker-compose.droplet.yml not found"
+                exit 1
+              fi
+            fi
+            
+            # 8. Thay YOUR_DOCKERHUB_USERNAME bằng username từ secret
+            echo "🔧 Updating docker-compose.yml with Docker Hub username..."
             sed -i "s/YOUR_DOCKERHUB_USERNAME/${{ secrets.DOCKERHUB_USERNAME }}/g" docker-compose.yml
             # Cập nhật image name trong docker-compose.yml
             sed -i "s|image:.*meltano-sync:latest|image: ${{ env.IMAGE_NAME }}:latest|g" docker-compose.yml
-            # Pull latest image from Docker Hub
-            docker pull ${{ env.IMAGE_NAME }}:latest
-            # Stop and remove old containers
+            
+            # 9. Validate docker-compose.yml syntax
+            echo "✅ Validating docker-compose.yml..."
+            docker-compose config > /dev/null || {
+              echo "❌ Error: docker-compose.yml syntax is invalid"
+              exit 1
+            }
+            
+            # 10. Cleanup old images (giữ lại 2 images gần nhất)
+            echo "🧹 Cleaning up old Docker images..."
+            docker image prune -f || true
+            # Xóa images cũ của meltano-sync (giữ lại 2 images gần nhất)
+            docker images "${{ env.IMAGE_NAME }}" --format "{{.ID}} {{.CreatedAt}}" | sort -k2 -r | tail -n +3 | awk '{print $1}' | xargs -r docker rmi -f || true
+            
+            # 11. Pull latest image from Docker Hub
+            echo "📥 Pulling latest image from Docker Hub..."
+            docker pull ${{ env.IMAGE_NAME }}:latest || {
+              echo "❌ Error: Failed to pull image from Docker Hub"
+              exit 1
+            }
+            
+            # 12. Stop and remove old containers
+            echo "🛑 Stopping old containers..."
             docker-compose down || true
-            # Start new containers with latest image
-            docker-compose up -d
-            # Show running containers
+            
+            # 13. Start new containers with latest image
+            echo "🚀 Starting new containers..."
+            docker-compose up -d || {
+              echo "❌ Error: Failed to start containers"
+              exit 1
+            }
+            
+            # 14. Wait for services to be ready (timeout 60 seconds)
+            echo "⏳ Waiting for services to be ready..."
+            sleep 10
+            
+            # 15. Health check - Kiểm tra containers đang chạy
+            echo "🏥 Checking container health..."
+            MAX_RETRIES=6
+            RETRY_COUNT=0
+            while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+              CONTAINERS_RUNNING=$(docker-compose ps --services --filter "status=running" | wc -l)
+              CONTAINERS_TOTAL=$(docker-compose ps --services | wc -l)
+              
+              if [ "$CONTAINERS_RUNNING" -eq "$CONTAINERS_TOTAL" ] && [ "$CONTAINERS_TOTAL" -gt 0 ]; then
+                echo "✅ All containers are running ($CONTAINERS_RUNNING/$CONTAINERS_TOTAL)"
+                break
+              fi
+              
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+              if [ $RETRY_COUNT -ge $MAX_RETRIES ]; then
+                echo "❌ Error: Not all containers are running after $MAX_RETRIES attempts"
+                echo "Container status:"
+                docker-compose ps
+                exit 1
+              fi
+              
+              echo "⏳ Waiting for containers... ($RETRY_COUNT/$MAX_RETRIES)"
+              sleep 10
+            done
+            
+            # 16. Kiểm tra SSH tunnel (nếu có)
+            if docker-compose ps ssh-tunnel | grep -q "Up"; then
+              echo "✅ SSH tunnel is running"
+            else
+              echo "⚠️  Warning: SSH tunnel may not be running (this is OK if not using SSH tunnel)"
+            fi
+            
+            # 17. Show running containers
+            echo "📊 Container status:"
             docker-compose ps
-            # Show logs
+            
+            # 18. Show recent logs
+            echo "📋 Recent logs (last 50 lines):"
             docker-compose logs --tail=50
+            
+            # 19. Show disk usage
+            echo "💾 Disk usage:"
+            df -h / | tail -1
+            
+            echo "✅ Deployment completed successfully!"
 
